@@ -1,215 +1,249 @@
-# client_gui.py
 import socket
 import threading
 import queue
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
 
-SERVER_HOST = "127.0.0.1"   # Đổi nếu server chạy máy khác
-SERVER_PORT = 5000
+# ================== DEFAULT ==================
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 5000
+
+# ================== PINK PASTEL THEME ==================
+BG_MAIN = "#fff1f2"        # hồng pastel rất nhạt (nền chính)
+BG_CARD = "#ffffff"       # trắng
+BG_LOG  = "#ffffff"       # trắng
+
+FG_MAIN = "#374151"       # chữ chính (xám đậm)
+FG_SUB  = "#6b7280"       # chữ phụ
+
+ACCENT_PINK = "#f9a8d4"   # hồng pastel
+ACCENT_PINK_DARK = "#ec4899"
+ACCENT_GREEN = "#86efac"  # xanh pastel
+ACCENT_BLUE = "#93c5fd"   # xanh pastel
+ERROR_COLOR = "#fca5a5"   # đỏ pastel
 
 
 class GuessClientGUI:
     def __init__(self, master):
         self.master = master
-        self.master.title("Game Đoán Số Nhiều Người Chơi 🎲")
+        self.master.title("🎲 Guess The Number | Multiplayer")
+        self.master.geometry("900x580")
+        self.master.configure(bg=BG_MAIN)
 
-        # Hàng trên: username + nút kết nối
-        top_frame = tk.Frame(master)
-        top_frame.pack(fill=tk.X, padx=5, pady=5)
+        # ================== TITLE ==================
+        title = tk.Label(
+            master,
+            text="🎲 Guess The Number 🌸",
+            font=("Segoe UI", 20, "bold"),
+            fg=ACCENT_PINK_DARK,
+            bg=BG_MAIN
+        )
+        title.pack(pady=(12, 2))
 
-        tk.Label(top_frame, text="Tên:").pack(side=tk.LEFT)
+        subtitle = tk.Label(
+            master,
+            text="Game đoán số nhiều người chơi",
+            font=("Segoe UI", 11),
+            fg=FG_SUB,
+            bg=BG_MAIN
+        )
+        subtitle.pack(pady=(0, 12))
+
+        # ================== CONNECTION CARD ==================
+        card = tk.Frame(master, bg=BG_CARD)
+        card.pack(padx=22, pady=10, fill=tk.X)
+
+        def label(text):
+            return tk.Label(
+                card,
+                text=text,
+                bg=BG_CARD,
+                fg=FG_SUB,
+                font=("Segoe UI", 10, "bold")
+            )
+
+        label("👤 Tên").grid(row=0, column=0, padx=6, pady=8)
         self.username_var = tk.StringVar()
-        self.username_entry = tk.Entry(top_frame, textvariable=self.username_var, width=15)
-        self.username_entry.pack(side=tk.LEFT, padx=5)
+        tk.Entry(card, textvariable=self.username_var, width=14).grid(row=0, column=1)
 
-        tk.Label(top_frame, text="IP:").pack(side=tk.LEFT)
-        self.host_var = tk.StringVar(value=SERVER_HOST)
-        self.host_entry = tk.Entry(top_frame, textvariable=self.host_var, width=12)
-        self.host_entry.pack(side=tk.LEFT, padx=5)
+        label("🌐 IP Server").grid(row=0, column=2, padx=6)
+        self.host_var = tk.StringVar(value=DEFAULT_HOST)
+        tk.Entry(card, textvariable=self.host_var, width=14).grid(row=0, column=3)
 
-        tk.Label(top_frame, text="Port:").pack(side=tk.LEFT)
-        self.port_var = tk.StringVar(value=str(SERVER_PORT))
-        self.port_entry = tk.Entry(top_frame, textvariable=self.port_var, width=6)
-        self.port_entry.pack(side=tk.LEFT, padx=5)
+        label("🔢 Port").grid(row=0, column=4, padx=6)
+        self.port_var = tk.StringVar(value=str(DEFAULT_PORT))
+        tk.Entry(card, textvariable=self.port_var, width=8).grid(row=0, column=5)
 
-        self.connect_button = tk.Button(top_frame, text="Kết nối", command=self.connect_to_server)
-        self.connect_button.pack(side=tk.LEFT, padx=5)
+        self.btn_connect = tk.Button(
+            card,
+            text="🔗 KẾT NỐI",
+            bg=ACCENT_PINK,
+            fg=FG_MAIN,
+            font=("Segoe UI", 10, "bold"),
+            relief="flat",
+            padx=16,
+            command=self.connect
+        )
+        self.btn_connect.grid(row=0, column=6, padx=12)
 
-        # Khung hiển thị log
-        self.text_area = scrolledtext.ScrolledText(master, height=20, state=tk.DISABLED)
-        self.text_area.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # ================== STATUS ==================
+        self.status = tk.Label(
+            master,
+            text="🔴 Chưa kết nối",
+            fg="#dc2626",
+            bg=BG_MAIN,
+            font=("Segoe UI", 10, "bold")
+        )
+        self.status.pack(pady=6)
 
-        # Khung nhập số đoán
-        bottom_frame = tk.Frame(master)
-        bottom_frame.pack(fill=tk.X, padx=5, pady=5)
+        # ================== LOG ==================
+        self.log_box = scrolledtext.ScrolledText(
+            master,
+            height=16,
+            bg=BG_LOG,
+            fg=FG_MAIN,
+            insertbackground=FG_MAIN,
+            font=("Consolas", 11),
+            relief="flat",
+            borderwidth=1
+        )
+        self.log_box.pack(fill=tk.BOTH, expand=True, padx=22, pady=10)
+        self.log_box.config(state=tk.DISABLED)
 
-        tk.Label(bottom_frame, text="Số đoán:").pack(side=tk.LEFT)
+        # màu chữ log
+        self.log_box.tag_config("win", foreground="#16a34a")
+        self.log_box.tag_config("hint", foreground="#2563eb")
+        self.log_box.tag_config("time", foreground="#ca8a04")
+
+        # ================== INPUT ==================
+        bottom = tk.Frame(master, bg=BG_MAIN)
+        bottom.pack(fill=tk.X, padx=22, pady=12)
+
+        tk.Label(
+            bottom,
+            text="🎯 Số đoán:",
+            fg=FG_MAIN,
+            bg=BG_MAIN,
+            font=("Segoe UI", 11, "bold")
+        ).pack(side=tk.LEFT)
+
         self.guess_var = tk.StringVar()
-        self.guess_entry = tk.Entry(bottom_frame, textvariable=self.guess_var)
-        self.guess_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-        self.guess_entry.bind("<Return>", self.send_guess_event)
+        self.guess_entry = tk.Entry(
+            bottom,
+            textvariable=self.guess_var,
+            font=("Segoe UI", 12),
+            width=24
+        )
+        self.guess_entry.pack(side=tk.LEFT, padx=8)
+        self.guess_entry.bind("<Return>", lambda e: self.send())
 
-        self.send_button = tk.Button(bottom_frame, text="Gửi", command=self.send_guess)
-        self.send_button.pack(side=tk.LEFT, padx=5)
+        self.btn_send = tk.Button(
+            bottom,
+            text="💌 GỬI",
+            bg=ACCENT_GREEN,
+            fg=FG_MAIN,
+            font=("Segoe UI", 11, "bold"),
+            relief="flat",
+            padx=22,
+            command=self.send
+        )
+        self.btn_send.pack(side=tk.LEFT)
 
-        # Trạng thái mạng
+        # ================== NETWORK ==================
         self.sock = None
-        self.listener_thread = None
-        self.running = False
-        self.recv_queue = queue.Queue()
+        self.queue = queue.Queue()
+        self.set_input(False)
 
-        # Ban đầu chưa cho đoán
-        self.set_input_enabled(False)
+        self.master.after(100, self.update_ui)
 
-        # Poll queue để cập nhật GUI từ thread khác
-        self.master.after(100, self.process_messages)
+    # ================== GUI HELPERS ==================
+    def log(self, msg):
+        self.log_box.config(state=tk.NORMAL)
 
-    # ================== HÀM HỖ TRỢ GUI ==================
+        if "ĐÚNG" in msg or "🎉" in msg:
+            self.log_box.insert(tk.END, msg + "\n", "win")
+        elif "LỚN HƠN" in msg or "NHỎ HƠN" in msg:
+            self.log_box.insert(tk.END, msg + "\n", "hint")
+        elif "⏰" in msg:
+            self.log_box.insert(tk.END, msg + "\n", "time")
+        else:
+            self.log_box.insert(tk.END, msg + "\n")
 
-    def log(self, message: str):
-        """In một dòng vào khung text."""
-        self.text_area.config(state=tk.NORMAL)
-        self.text_area.insert(tk.END, message + "\n")
-        self.text_area.see(tk.END)
-        self.text_area.config(state=tk.DISABLED)
+        self.log_box.see(tk.END)
+        self.log_box.config(state=tk.DISABLED)
 
-    def set_input_enabled(self, enabled: bool):
+    def set_input(self, enabled):
         state = tk.NORMAL if enabled else tk.DISABLED
         self.guess_entry.config(state=state)
-        self.send_button.config(state=state)
+        self.btn_send.config(state=state)
 
-    # ================== KẾT NỐI SERVER ==================
-
-    def connect_to_server(self):
-        if self.sock is not None:
+    # ================== CONNECT ==================
+    def connect(self):
+        if self.sock:
             messagebox.showinfo("Thông báo", "Đã kết nối rồi.")
             return
 
-        username = self.username_var.get().strip()
-        if not username:
-            messagebox.showwarning("Lỗi", "Vui lòng nhập tên.")
-            return
-
-        host = self.host_var.get().strip() or SERVER_HOST
-        port_str = self.port_var.get().strip() or str(SERVER_PORT)
-
-        try:
-            port = int(port_str)
-        except ValueError:
-            messagebox.showerror("Lỗi", "Port không hợp lệ.")
+        name = self.username_var.get().strip()
+        if not name:
+            messagebox.showwarning("Thiếu tên", "Vui lòng nhập tên.")
             return
 
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((host, port))
+            host = self.host_var.get().strip()
+            port = int(self.port_var.get().strip())
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((host, port))
+            self.sock.sendall((name + "\n").encode("utf-8"))
         except Exception as e:
-            messagebox.showerror("Lỗi", f"Không kết nối được tới server:\n{e}")
+            messagebox.showerror("Lỗi", f"Không kết nối được server:\n{e}")
+            self.sock = None
             return
 
-        self.sock = s
-        self.running = True
-        self.log(f"Kết nối tới {host}:{port}")
-        self.connect_button.config(state=tk.DISABLED)
+        self.status.config(text="🟢 Đã kết nối", fg="#16a34a")
+        self.btn_connect.config(state=tk.DISABLED)
+        self.set_input(True)
+        self.log(f"Đã kết nối tới {host}:{port}")
 
-        # Gửi username
-        try:
-            self.sock.sendall((username + "\n").encode("utf-8"))
-        except Exception as e:
-            messagebox.showerror("Lỗi", f"Gửi username thất bại:\n{e}")
-            self.close_connection()
-            return
+        threading.Thread(target=self.listen_server, daemon=True).start()
 
-        # Bắt đầu thread nhận dữ liệu
-        self.listener_thread = threading.Thread(target=self.listen_server, daemon=True)
-        self.listener_thread.start()
-
-        # Cho phép nhập số đoán
-        self.set_input_enabled(True)
-        self.guess_entry.focus_set()
-
-    # ================== NHẬN DỮ LIỆU TỪ SERVER ==================
-
+    # ================== RECEIVE ==================
     def listen_server(self):
         try:
             with self.sock.makefile("r", encoding="utf-8") as f:
                 for line in f:
-                    if not line:
-                        break
-                    text = line.rstrip("\n")
-                    self.recv_queue.put(text)
-        except Exception as e:
-            self.recv_queue.put(f"[LỖI] Mất kết nối server: {e}")
+                    self.queue.put(line.rstrip("\n"))
+        except Exception:
+            self.queue.put("❌ Mất kết nối server")
         finally:
-            self.recv_queue.put("[SYSTEM] Kết nối server đã đóng.")
-            self.running = False
+            self.queue.put("[SYSTEM] DISCONNECTED")
 
-    def process_messages(self):
-        """Lấy message từ queue và in ra GUI. Hàm này chạy định kỳ bằng after()."""
-        while not self.recv_queue.empty():
-            msg = self.recv_queue.get()
-            # Xử lý một vài thông điệp hệ thống
+    def update_ui(self):
+        while not self.queue.empty():
+            msg = self.queue.get()
+            self.log(msg)
             if msg.startswith("[SYSTEM]"):
-                self.log(msg)
-                self.set_input_enabled(False)
-                self.connect_button.config(state=tk.NORMAL)
+                self.status.config(text="🔴 Chưa kết nối", fg="#dc2626")
+                self.btn_connect.config(state=tk.NORMAL)
+                self.set_input(False)
                 self.sock = None
-            else:
-                self.log(msg)
-        # Lặp lại
-        self.master.after(100, self.process_messages)
+        self.master.after(100, self.update_ui)
 
-    # ================== GỬI DỮ LIỆU LÊN SERVER ==================
-
-    def send_guess_event(self, event):
-        self.send_guess()
-
-    def send_guess(self):
-        if self.sock is None:
-            messagebox.showwarning("Chưa kết nối", "Hãy kết nối server trước.")
+    # ================== SEND ==================
+    def send(self):
+        if not self.sock:
             return
-
-        guess = self.guess_var.get().strip()
-        if not guess:
-            return
-
-        try:
-            self.sock.sendall((guess + "\n").encode("utf-8"))
-        except Exception as e:
-            messagebox.showerror("Lỗi", f"Không gửi được dữ liệu:\n{e}")
-            self.close_connection()
-            return
-
-        # Nếu người chơi gõ quit thì tự đóng
-        if guess.lower() in ("quit", "exit"):
-            self.set_input_enabled(False)
-
-        self.guess_var.set("")
-
-    # ================== ĐÓNG KẾT NỐI ==================
-
-    def close_connection(self):
-        self.running = False
-        if self.sock:
+        msg = self.guess_var.get().strip()
+        if msg:
             try:
-                self.sock.close()
-            except:
-                pass
-            self.sock = None
-        self.set_input_enabled(False)
-        self.connect_button.config(state=tk.NORMAL)
+                self.sock.sendall((msg + "\n").encode("utf-8"))
+            except Exception as e:
+                messagebox.showerror("Lỗi", f"Gửi thất bại:\n{e}")
+            self.guess_var.set("")
 
 
 def main():
     root = tk.Tk()
-    app = GuessClientGUI(root)
-
-    def on_close():
-        if messagebox.askokcancel("Thoát", "Thoát chương trình?"):
-            app.close_connection()
-            root.destroy()
-
-    root.protocol("WM_DELETE_WINDOW", on_close)
+    GuessClientGUI(root)
     root.mainloop()
 
 
